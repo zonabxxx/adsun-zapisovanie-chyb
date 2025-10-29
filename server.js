@@ -465,10 +465,11 @@ app.get('/api/chyby/stats', authenticateApiKey, async (req, res) => {
 });
 
 // Spusti server
-const server = app.listen(PORT, () => {
+const HOST = process.env.HOST || '0.0.0.0';
+const server = app.listen(PORT, HOST, () => {
   console.log(`\n${'='.repeat(50)}`);
   console.log(`🚀 Server "Zapisovanie chyb GPT" beží`);
-  console.log(`📍 URL: http://localhost:${PORT}`);
+  console.log(`📍 HOST: ${HOST}:${PORT}`);
   console.log(`🔑 API Key: ${process.env.API_KEY ? '✓ nastavený' : '✗ CHÝBA!'}`);
   console.log(`📄 Spreadsheet ID: ${process.env.SPREADSHEET_ID ? '✓ nastavený' : '✗ CHÝBA!'}`);
   console.log(`${'='.repeat(50)}\n`);
