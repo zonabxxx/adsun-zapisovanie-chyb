@@ -1,0 +1,383 @@
+openapi: 3.1.0
+info:
+  title: Zapisovanie chyb API - ADSUN
+  description: API pre komplexný systém zapisovania a správy chýb v produkcii cez Google Sheets
+  version: 2.0.0
+servers:
+  - url: https://tvoja-railway-url.up.railway.app
+    description: Production Server
+  - url: http://localhost:3000
+    description: Local Development Server
+
+paths:
+  /health:
+    get:
+      operationId: healthCheck
+      summary: Kontrola stavu servera
+      responses:
+        '200':
+          description: Server beží
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  message:
+                    type: string
+
+  /api/chyby:
+    get:
+      operationId: getAllChyby
+      summary: Získa všetky zaznamenané chyby
+      description: Vráti kompletný zoznam všetkých chýb z Google Sheets tabuľky
+      security:
+        - ApiKeyAuth: []
+      responses:
+        '200':
+          description: Zoznam chýb
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  count:
+                    type: integer
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Chyba'
+    
+    post:
+      operationId: createChyba
+      summary: Vytvorí novú chybu
+      description: Pridá novú chybu do Google Sheets. Timestamp sa vytvorí automaticky.
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - popis_problemu
+              properties:
+                klient:
+                  type: string
+                  description: Názov klienta
+                  example: "Water rows"
+                zakazka_id:
+                  type: string
+                  description: ID zákazky (Z######)
+                  example: "Z251293"
+                nazov_zakazky:
+                  type: string
+                  description: Názov zákazky
+                  example: "WR - Aquanale výstava"
+                faza:
+                  type: string
+                  description: Fáza projektu
+                  enum: [Výroba, Inštalácia, Príprava, Design, Dokončenie]
+                  example: "Výroba"
+                typ_chyby:
+                  type: string
+                  description: Typ/kategória chyby
+                  enum: [Komunikácia, Proces, Technická, Materiál, Ľudská chyba]
+                  example: "Komunikácia"
+                zavaznost:
+                  type: string
+                  description: Závažnosť chyby
+                  enum: [S1 – Kritická, S2 – Vysoká, S3 – Stredná, S4 – Nízka]
+                  example: "S1 – Kritická"
+                popis_problemu:
+                  type: string
+                  description: Detailný popis problému (POVINNÉ)
+                  example: "vyrobené nálepky v zlom rozmere"
+                pricina:
+                  type: string
+                  description: Príčina (5x Prečo analýza)
+                  example: "zle nastavenie zákazky - vstup dát - nevyspecifikované požiadavky"
+                okamzite_opatrenie:
+                  type: string
+                  description: Okamžité riešenie
+                  example: "oprava - vytlačenie znova"
+                preventivne_opatrenie:
+                  type: string
+                  description: Preventívne opatrenie do budúcna
+                  example: "napísať pomer tlače do názvu súboru"
+                zodpovedny:
+                  type: string
+                  description: Osoba zodpovedná za chybu/riešenie
+                  example: "Michela Malarová"
+                nahlasil:
+                  type: string
+                  description: Kto nahlásil chybu
+                  enum: [Klient, Interný pracovník, Montážnik, Vedenie]
+                  example: "klient"
+                stav:
+                  type: string
+                  description: Aktuálny stav
+                  enum: [Nová, V riešení, Uzavretá, Sledovanie]
+                  default: "Nová"
+                follow_up_datum:
+                  type: string
+                  description: Dátum ďalšieho sledovania
+                  example: "05.11.2025"
+                odhad_naklad:
+                  type: string
+                  description: Odhadovaný náklad v € (môže obsahovať text)
+                  example: "2€ materiál"
+                strata_casu:
+                  type: string
+                  description: Strata času (môže obsahovať text)
+                  example: "3min"
+                dokaz_link:
+                  type: string
+                  description: Link na dôkaz (Drive/Foto)
+                  example: "https://drive.google.com/..."
+                tagy:
+                  type: string
+                  description: Tagy oddelené čiarkou
+                  example: "urgentné, opakujúce sa"
+      responses:
+        '200':
+          description: Chyba vytvorená
+        '400':
+          description: Chybná požiadavka
+        '401':
+          description: Neautorizovaný prístup
+
+  /api/chyby/zakazka/{zakazka_id}:
+    get:
+      operationId: getChybyByZakazka
+      summary: Získa chyby pre konkrétnu zákazku
+      description: Filtruje chyby podľa ID zákazky
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - name: zakazka_id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: ID zákazky (napr. Z251293)
+          example: "Z251293"
+      responses:
+        '200':
+          description: Chyby pre zákazku
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  count:
+                    type: integer
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Chyba'
+        '404':
+          description: Žiadne chyby pre túto zákazku
+  
+  /api/chyby/stats:
+    get:
+      operationId: getChybyStats
+      summary: Získa štatistiky chýb
+      description: Vráti agregované štatistiky - počty podľa závažnosti, stavu, typu, fázy a celkové náklady
+      security:
+        - ApiKeyAuth: []
+      responses:
+        '200':
+          description: Štatistiky
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  data:
+                    type: object
+                    properties:
+                      total:
+                        type: integer
+                        description: Celkový počet chýb
+                      podla_zavaznosti:
+                        type: object
+                        description: Počet chýb podľa závažnosti
+                      podla_stavu:
+                        type: object
+                        description: Počet chýb podľa stavu
+                      podla_typu:
+                        type: object
+                        description: Počet chýb podľa typu
+                      podla_fazy:
+                        type: object
+                        description: Počet chýb podľa fázy
+                      celkovy_odhad_naklad:
+                        type: number
+                        description: Celkový odhadovaný náklad v €
+                      celkova_strata_casu:
+                        type: number
+                        description: Celková strata času v hodinách
+
+  /api/chyby:
+    put:
+      operationId: updateChyba
+      summary: Aktualizuje existujúcu chybu
+      description: Upraví údaje existujúcej chyby. Identifikácia pomocou zakazka_id + timestamp.
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - zakazka_id
+                - timestamp
+              properties:
+                zakazka_id:
+                  type: string
+                  description: ID zákazky (pre identifikáciu)
+                  example: "Z251293"
+                timestamp:
+                  type: string
+                  description: Timestamp (pre identifikáciu)
+                  example: "27.10.2025"
+                klient:
+                  type: string
+                nazov_zakazky:
+                  type: string
+                faza:
+                  type: string
+                typ_chyby:
+                  type: string
+                zavaznost:
+                  type: string
+                popis_problemu:
+                  type: string
+                pricina:
+                  type: string
+                okamzite_opatrenie:
+                  type: string
+                preventivne_opatrenie:
+                  type: string
+                zodpovedny:
+                  type: string
+                nahlasil:
+                  type: string
+                stav:
+                  type: string
+                  enum: [Nová, V riešení, Uzavretá, Sledovanie]
+                follow_up_datum:
+                  type: string
+                odhad_naklad:
+                  type: string
+                strata_casu:
+                  type: string
+                dokaz_link:
+                  type: string
+                tagy:
+                  type: string
+      responses:
+        '200':
+          description: Chyba aktualizovaná
+        '404':
+          description: Chyba nenájdená
+
+components:
+  schemas:
+    Chyba:
+      type: object
+      properties:
+        timestamp:
+          type: string
+          description: Dátum a čas vytvorenia
+          example: "27.10.2025"
+        klient:
+          type: string
+          description: Názov klienta
+          example: "Water rows"
+        zakazka_id:
+          type: string
+          description: ID zákazky
+          example: "Z251293"
+        nazov_zakazky:
+          type: string
+          description: Názov zákazky
+          example: "WR - Aquanale výstava"
+        faza:
+          type: string
+          description: Fáza projektu
+          example: "Výroba"
+        typ_chyby:
+          type: string
+          description: Typ chyby
+          example: "Komunikácia"
+        zavaznost:
+          type: string
+          description: Závažnosť
+          example: "S1 – Kritická"
+        popis_problemu:
+          type: string
+          description: Popis problému
+          example: "vyrobené nálepky v zlom rozmere"
+        pricina:
+          type: string
+          description: Príčina (5x Prečo)
+          example: "zle nastavenie zákazky"
+        okamzite_opatrenie:
+          type: string
+          description: Okamžité opatrenie
+          example: "oprava - vytlačenie znova"
+        preventivne_opatrenie:
+          type: string
+          description: Preventívne opatrenie
+          example: "napísať pomer tlače do názvu súboru"
+        zodpovedny:
+          type: string
+          description: Zodpovedná osoba
+          example: "Michela Malarová"
+        nahlasil:
+          type: string
+          description: Kto nahlásil
+          example: "klient"
+        stav:
+          type: string
+          description: Stav chyby
+          example: "V riešení"
+        follow_up_datum:
+          type: string
+          description: Follow-up dátum
+          example: "05.11.2025"
+        odhad_naklad:
+          type: string
+          description: Odhadovaný náklad
+          example: "2€ materiál"
+        strata_casu:
+          type: string
+          description: Strata času
+          example: "3min"
+        dokaz_link:
+          type: string
+          description: Link na dôkaz
+          example: "https://drive.google.com/..."
+        tagy:
+          type: string
+          description: Tagy
+          example: "urgentné, opakujúce sa"
+  
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-Chyby-API-Key
+      description: API kľúč pre autentifikáciu (nastav v ChatGPT Actions)
