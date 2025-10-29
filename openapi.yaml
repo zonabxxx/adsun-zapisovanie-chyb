@@ -4,7 +4,7 @@ info:
   description: API pre komplexný systém zapisovania a správy chýb v produkcii cez Google Sheets
   version: 2.0.0
 servers:
-  - url: https://tvoja-railway-url.up.railway.app
+  - url: https://adsun-zapisovanie-chyb-production.up.railway.app
     description: Production Server
   - url: http://localhost:3000
     description: Local Development Server
